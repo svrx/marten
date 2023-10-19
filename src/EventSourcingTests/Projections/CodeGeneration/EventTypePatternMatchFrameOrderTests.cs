@@ -11,6 +11,7 @@ using Marten.Events.Aggregation;
 using Marten.Events.CodeGeneration;
 using Marten.Events.Projections;
 using Marten.Internal.CodeGeneration;
+using Marten.Testing.Harness;
 using Shouldly;
 using Xunit;
 
@@ -40,6 +41,8 @@ public class EventTypePatternMatchFrameOrderTests
     {
         var frames = events.Data.ToDummyEventProcessingFrames();
         var sortedFrames = EventTypePatternMatchFrame.SortByEventTypeHierarchy(frames);
+
+        sortedFrames.ShouldHaveTheSameElementsAs(frames);
 
         var eventTypes = sortedFrames.Select(p => p.EventType).ToArray();
         eventTypes.ShouldHaveDerivedTypesBeforeBaseTypes();
