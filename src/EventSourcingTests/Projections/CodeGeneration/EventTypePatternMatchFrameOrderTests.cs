@@ -40,9 +40,9 @@ public class EventTypePatternMatchFrameOrderTests
     private static void RunComparerTest(TypeArrayData events)
     {
         var frames = events.Data.ToDummyEventProcessingFrames();
-        var sortedFrames = EventTypePatternMatchFrame.SortByEventTypeHierarchy(frames);
+        var sortedFrames = EventTypePatternMatchFrame.SortByEventTypeHierarchy(frames).ToArray();
 
-        sortedFrames.ShouldHaveTheSameElementsAs(frames);
+        sortedFrames.Length.ShouldBe(frames.ToArray().Length);
 
         var eventTypes = sortedFrames.Select(p => p.EventType).ToArray();
         eventTypes.ShouldHaveDerivedTypesBeforeBaseTypes();

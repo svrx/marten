@@ -54,10 +54,9 @@ internal class EventTypePatternMatchFrame: Frame
     /// </summary>
     /// <param name="frames"></param>
     /// <returns></returns>
-    internal static IEnumerable<EventProcessingFrame> SortByEventTypeHierarchy(List<EventProcessingFrame> frames)
+    internal static IEnumerable<EventProcessingFrame> SortByEventTypeHierarchy(IEnumerable<EventProcessingFrame> frames)
     {
-        frames.Sort(new EventTypeComparer());
-        return frames;
+        return frames.OrderBy(frame => frame, new EventTypeComparer());
     }
 
     /// <summary>
@@ -68,13 +67,45 @@ internal class EventTypePatternMatchFrame: Frame
     {
         public int Compare(EventProcessingFrame x, EventProcessingFrame y)
         {
-            if (x.EventType.CanBeCastTo(y.EventType))
-                return -1;
+            using var xh = GetTypeHierarchy(x?.EventType).GetEnumerator();
+            using var yh = GetTypeHierarchy(y?.EventType).GetEnumerator();
 
-            if (y.EventType.CanBeCastTo(x.EventType))
-                return 1;
+            while (true)
+            {
+                var current = (
+                    x: xh.MoveNext() ? xh.Current : null,
+                    y: yh.MoveNext() ? yh.Current : null
+                );
 
-            return 0;
+                switch (current)
+                {
+                    case (null, null):
+                        return 0; //Not expected to get here
+                    case (null, _):
+                        return 1; //Y is more derived, Y>X 
+                    case (_, null):
+                        return -1; //X is more derived, Y<X
+                    case (_, _):
+                        var comparison = StringComparer.OrdinalIgnoreCase.Compare(current.x.Name, current.y.Name);
+                        if (comparison != 0)
+                            return comparison;
+                        break;
+                }
+            }
+        }
+
+        private static IEnumerable<Type> GetTypeHierarchy(Type type)
+        {
+            var hierarchy = new List<Type>(5);
+            while (type != null)
+            {
+                hierarchy.Add(type);
+                type = type.BaseType;
+            }
+
+            return hierarchy
+                .AsEnumerable()
+                .Reverse();
         }
     }
 }
