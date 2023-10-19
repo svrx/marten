@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -63,6 +64,11 @@ public abstract partial class GeneratedAggregateProjectionBase<T>
     {
         _inlineType = assembly.GetExportedTypes().FirstOrDefault(x => x.Name == _inlineAggregationHandlerType);
         _liveType = assembly.GetExportedTypes().FirstOrDefault(x => x.Name == _liveAggregationTypeName);
+
+        if (_liveGeneratedType != null)
+        {
+            Debug.WriteLine(_liveGeneratedType.SourceCode);
+        }
 
         return _inlineType != null && _liveType != null;
     }

@@ -23,8 +23,16 @@ internal class EventTypePatternMatchFrame: Frame
         if (_inner.Any())
         {
             writer.Write($"BLOCK:switch ({_event.Usage})");
-            foreach (var frame in SortByEventTypeHierarchy(_inner))
+            var sortedEventFrames = SortByEventTypeHierarchy(_inner).ToArray();
+            if (sortedEventFrames.Length != _inner.Count)
+            {
+                throw new InvalidOperationException("Event types were lost during the sorting");
+            }
+
+            foreach (var frame in sortedEventFrames)
+            {
                 frame.GenerateCode(method, writer);
+            }
 
             writer.FinishBlock();
         }
@@ -46,9 +54,10 @@ internal class EventTypePatternMatchFrame: Frame
     /// </summary>
     /// <param name="frames"></param>
     /// <returns></returns>
-    internal static IEnumerable<EventProcessingFrame> SortByEventTypeHierarchy(IEnumerable<EventProcessingFrame> frames)
+    internal static IEnumerable<EventProcessingFrame> SortByEventTypeHierarchy(List<EventProcessingFrame> frames)
     {
-        return new SortedSet<EventProcessingFrame>(frames, new EventTypeComparer());
+        frames.Sort(new EventTypeComparer());
+        return frames;
     }
 
     /// <summary>
