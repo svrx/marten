@@ -43,6 +43,7 @@ public class EventTypePatternMatchFrameOrderTests
         var sortedFrames = EventTypePatternMatchFrame.SortByEventTypeHierarchy(frames).ToArray();
 
         sortedFrames.Length.ShouldBe(frames.ToArray().Length);
+        sortedFrames.ShouldBe(frames, ignoreOrder:true);
 
         var eventTypes = sortedFrames.Select(p => p.EventType).ToArray();
         eventTypes.ShouldHaveDerivedTypesBeforeBaseTypes();

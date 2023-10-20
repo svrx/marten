@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using JasperFx.CodeGeneration;
 using JasperFx.CodeGeneration.Frames;
@@ -13,7 +15,7 @@ internal class EventTypePatternMatchFrame: Frame
     private readonly List<EventProcessingFrame> _inner;
     private Variable _event;
 
-    public EventTypePatternMatchFrame(List<EventProcessingFrame> frames): base(frames.Any(x => x.IsAsync))
+    public EventTypePatternMatchFrame(List<EventProcessingFrame> frames) : base(frames.Any(x => x.IsAsync))
     {
         _inner = frames;
     }
@@ -46,7 +48,8 @@ internal class EventTypePatternMatchFrame: Frame
 
         yield return _event;
 
-        foreach (var variable in _inner.SelectMany(x => x.FindVariables(chain))) yield return variable;
+        foreach (var variable in _inner.SelectMany(x => x.FindVariables(chain)))
+            yield return variable;
     }
 
     /// <summary>
@@ -54,58 +57,79 @@ internal class EventTypePatternMatchFrame: Frame
     /// </summary>
     /// <param name="frames"></param>
     /// <returns></returns>
+
     internal static IEnumerable<EventProcessingFrame> SortByEventTypeHierarchy(IEnumerable<EventProcessingFrame> frames)
     {
-        return frames.OrderBy(frame => frame, new EventTypeComparer());
+        var framesReference = frames.ToDictionary(p => p.EventType);
+        return TypeSorter.SortByHierarchy(framesReference.Keys)
+            .Where(p => framesReference.ContainsKey(p))
+            .Select(p => framesReference[p]);
     }
 
-    /// <summary>
-    /// Sort frames by event type hierarchy
-    /// <remarks>Comparer is not safe to use outside of intended purpose</remarks>
-    /// </summary>
-    private class EventTypeComparer: IComparer<EventProcessingFrame>
+    private static class TypeSorter
     {
-        public int Compare(EventProcessingFrame x, EventProcessingFrame y)
+        private static ConcurrentDictionary<Type,List<Type>> Graph { get; } = new();
+
+        public static IEnumerable<Type> SortByHierarchy(ICollection<Type> types)
         {
-            using var xh = GetTypeHierarchy(x?.EventType).GetEnumerator();
-            using var yh = GetTypeHierarchy(y?.EventType).GetEnumerator();
+            var typesSet = new HashSet<Type>(types);
+            PopulateGraph(types);
 
-            while (true)
+            var visited = new HashSet<Type>();
+            var sorted = new Stack<Type>();
+
+            // Topological sort
+            foreach (var type in typesSet.OrderByDescending(type => type.Name)) //Orders by name at top-level
             {
-                var current = (
-                    x: xh.MoveNext() ? xh.Current : null,
-                    y: yh.MoveNext() ? yh.Current : null
-                );
+                VisitGraph(type, visited, sorted);
+            }
 
-                switch (current)
-                {
-                    case (null, null):
-                        return 0; //Not expected to get here
-                    case (null, _):
-                        return 1; //Y is more derived, Y>X 
-                    case (_, null):
-                        return -1; //X is more derived, Y<X
-                    case (_, _):
-                        var comparison = StringComparer.OrdinalIgnoreCase.Compare(current.x.Name, current.y.Name);
-                        if (comparison != 0)
-                            return comparison;
-                        break;
-                }
+            return sorted.Where(typesSet.Contains);
+        }
+
+        private static void VisitGraph(Type type, HashSet<Type> visited, Stack<Type> sorted)
+        {
+            //Traverse the graph depth first recursively
+            if (visited.Contains(type)) return;
+            visited.Add(type);
+
+            foreach (var child in Graph[type])
+            {
+                VisitGraph(child, visited, sorted);
+            }
+
+            sorted.Push(type);
+        }
+
+        private static void PopulateGraph(ICollection<Type> types)
+        {
+            foreach (var type in types)
+            {
+                AddTypeHierarchy(type);
             }
         }
 
-        private static IEnumerable<Type> GetTypeHierarchy(Type type)
+        private static void AddTypeHierarchy(Type type)
         {
-            var hierarchy = new List<Type>(5);
-            while (type != null)
+            if(Graph.ContainsKey(type))
+                return;
+
+            Graph.TryAdd(type, new List<Type>());
+            
+            // Add base types to the graph
+            var baseType = type.BaseType;
+            if (baseType != null)
             {
-                hierarchy.Add(type);
-                type = type.BaseType;
+                Graph[type].Add(baseType);
+                AddTypeHierarchy(baseType);
             }
 
-            return hierarchy
-                .AsEnumerable()
-                .Reverse();
+            // Add interfaces to the graph
+            foreach (var interfaceType in type.GetInterfaces())
+            {
+                Graph[type].Add(interfaceType);
+                AddTypeHierarchy(interfaceType);
+            }
         }
     }
 }
