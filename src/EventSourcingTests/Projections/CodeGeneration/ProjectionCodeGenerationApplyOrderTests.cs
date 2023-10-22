@@ -1,14 +1,9 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using JasperFx.CodeGeneration;
-using JasperFx.Core;
 using JasperFx.Core.Reflection;
-using Lamar.IoC.Instances;
 using Marten;
 using Marten.Events.Aggregation;
-using Marten.Events.CodeGeneration;
 using Marten.Events.Projections;
 using Marten.Internal.CodeGeneration;
 using Shouldly;

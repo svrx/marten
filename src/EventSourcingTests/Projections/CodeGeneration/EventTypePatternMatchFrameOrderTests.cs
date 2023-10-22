@@ -1,51 +1,56 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using JasperFx.CodeGeneration;
 using JasperFx.Core;
-using JasperFx.Core.Reflection;
-using Lamar.IoC.Instances;
-using Marten;
-using Marten.Events.Aggregation;
 using Marten.Events.CodeGeneration;
-using Marten.Events.Projections;
-using Marten.Internal.CodeGeneration;
-using Marten.Testing.Harness;
 using Shouldly;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace EventSourcingTests.Projections.CodeGeneration;
 
 
 public class EventTypePatternMatchFrameOrderTests
 {
+    private readonly ITestOutputHelper _outputHelper;
+
+    public EventTypePatternMatchFrameOrderTests(ITestOutputHelper outputHelper)
+    {
+        _outputHelper = outputHelper;
+    }
+
     [Theory]
     [MemberData(nameof(GetEventTypeCombinations))]
     public void SortByEventTypeHierarchy_WithCombinations_SortsAsExpected(TypeArrayData events) =>
-        RunComparerTest(events);
+        RunSortByHierarchyTest(events);
 
     public static IEnumerable<object[]> GetEventTypeCombinations() =>
-        GetCombinationsEventsData(typeof(Base), typeof(FooBase), typeof(FooA), typeof(FooX), typeof(BarBase), typeof(BarA), typeof(BarX), typeof(FooBarA), typeof(FooBarX));
+        GetCombinationsEventsData(3, 6,
+            typeof(Base), typeof(IFoo), typeof(IBar),
+            typeof(FooBase), typeof(FooA), typeof(FooX),
+            typeof(BarBase), typeof(BarA), typeof(BarX),
+            typeof(FooBarA), typeof(FooBarX) 
+        );
 
 
     [Theory]
     [MemberData(nameof(GetEventTypePermutations))]
     public void SortByEventTypeHierarchy_WithPermutations_SortsAsExpected(TypeArrayData events) =>
-        RunComparerTest(events);
+        RunSortByHierarchyTest(events);
 
     public static IEnumerable<object[]> GetEventTypePermutations() =>
         GetPermutationsEventsData(typeof(FooBase), typeof(FooA), typeof(FooX), typeof(BarBase), typeof(FooBarA), typeof(FooBarX));
 
-    private static void RunComparerTest(TypeArrayData events)
+    private void RunSortByHierarchyTest(TypeArrayData events)
     {
         var frames = events.Data.ToDummyEventProcessingFrames();
         var sortedFrames = EventTypePatternMatchFrame.SortByEventTypeHierarchy(frames).ToArray();
 
-        sortedFrames.Length.ShouldBe(frames.ToArray().Length);
-        sortedFrames.ShouldBe(frames, ignoreOrder:true);
-
         var eventTypes = sortedFrames.Select(p => p.EventType).ToArray();
+        _outputHelper.WriteLine($"{events} => {new TypeArrayData(eventTypes)}");
+
+        sortedFrames.Length.ShouldBe(frames.ToArray().Length);
+        sortedFrames.ShouldBe(frames, ignoreOrder: true);
         eventTypes.ShouldHaveDerivedTypesBeforeBaseTypes();
     }
 
@@ -53,23 +58,10 @@ public class EventTypePatternMatchFrameOrderTests
         events.GetPermutations()
             .Select(p => new object[] { new TypeArrayData(p.ToArray()) });
 
-    private static IEnumerable<object[]> GetCombinationsEventsData(params Type[] events) =>
+    private static IEnumerable<object[]> GetCombinationsEventsData(int minSize, int maxSize, params Type[] events) =>
         events.GetCombinations()
-            .Where(p => p.Count() > 3)
+            .Where(p => minSize <= p.Count() && p.Count() <= maxSize)
             .Select(p => new object[] { new TypeArrayData(p.ToArray()) });
-
-    public class Base{}
-    public class FooBase : Base { }
-    public class BarBase: Base { }
-
-    public class FooA : FooBase { }
-    public class FooX: FooBase { }
-
-    public class BarA: BarBase { }
-    public class BarX: BarBase { }
-
-    public class FooBarA: BarBase { }
-    public class FooBarX: BarBase { }
 
     public class TypeArrayData
     {
@@ -85,6 +77,23 @@ public class EventTypePatternMatchFrameOrderTests
             return $"[{string.Join(", ", Data.Select(x => x.Name))}]";
         }
     }
+
+    public class Base{}
+
+    public interface IFoo {}
+    public interface IBar { }
+
+    public class FooBase : Base, IFoo { }
+    public class BarBase: Base, IBar { }
+
+    public class FooA : FooBase { }
+    public class FooX: FooBase { }
+
+    public class BarA: BarBase { }
+    public class BarX: BarBase { }
+
+    public class FooBarA: BarBase, IFoo { }
+    public class FooBarX: BarBase, IFoo { }
 }
 
 internal static class EventTypePatternMatchFrameOrderTestsExtensions
